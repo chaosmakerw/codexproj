@@ -27,6 +27,8 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload static files
         uses: actions/upload-pages-artifact@v3
@@ -35,7 +37,6 @@ jobs:
             index.html
             styles.css
             app.js
-            README.md
 
       - name: Deploy
         id: deployment
