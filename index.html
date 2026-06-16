@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>俗世神人</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-block">
+        <p class="eyebrow">Contested Public Figures</p>
+        <h1>俗世神人</h1>
+        <p class="intro">记录那些在互联网上被追捧、被质疑、被反复讨论的人。</p>
+      </div>
+      <div class="stats" aria-live="polite">
+        <span id="personCount">0</span>
+        <small>个观察对象</small>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="workspace" aria-label="俗世神人记录管理">
+        <div class="search-panel">
+          <div class="panel-heading">
+            <label for="searchInput">本地搜索</label>
+            <span>名称 · 标签 · 正文 · 来源</span>
+          </div>
+          <div class="search-row">
+            <input
+              id="searchInput"
+              type="search"
+              placeholder="例如：找出被高度追捧但争议很大、靠直播走红、评价两极的人"
+              autocomplete="off"
+            />
+            <button id="searchButton" type="button" class="primary-button">搜索</button>
+          </div>
+          <p id="searchStatus" class="status">当前使用本地智能排序，稳定记录优先。</p>
+        </div>
+
+        <div class="toolbar">
+          <div class="view-tabs" role="tablist" aria-label="列表视图">
+            <button class="tab active" type="button" data-filter="all">全部</button>
+            <button class="tab" type="button" data-filter="recent">最近更新</button>
+            <button class="tab" type="button" data-filter="tagged">有标签</button>
+          </div>
+          <button id="exportButton" type="button" class="ghost-button">导出 JSON</button>
+        </div>
+
+        <div id="peopleList" class="people-list" aria-live="polite"></div>
+
+        <details class="future-ai">
+          <summary>AI 功能 · 有待开发</summary>
+          <div class="future-ai-body">
+            <p>AI 搜索与自动建档已暂时封存。后续确认稳定的 API、网络和费用方案后再启用。</p>
+            <div class="search-row">
+              <input
+                id="aiImportInput"
+                type="search"
+                placeholder="预留：输入人物名、网名或关键词"
+                autocomplete="off"
+                disabled
+              />
+              <button id="aiImportButton" type="button" class="secondary-button" disabled>暂未开放</button>
+            </div>
+            <p id="aiImportStatus" class="status">有待开发。</p>
+          </div>
+        </details>
+      </section>
+
+      <aside class="editor" aria-label="上传人物记录">
+        <div class="editor-header">
+          <div>
+            <p class="eyebrow">Field Note</p>
+            <h2>记录人物</h2>
+          </div>
+          <button id="resetButton" type="button" class="icon-button" title="清空表单">↺</button>
+        </div>
+
+        <form id="personForm">
+          <input type="hidden" id="personId" />
+
+          <label>
+            名称 / 网名
+            <input id="name" name="name" required placeholder="例如：某位网红、博主、创业者" />
+          </label>
+
+          <label>
+            活跃时期
+            <input id="era" name="era" placeholder="例如：2020 至今 / 短视频时代" />
+          </label>
+
+          <label>
+            身份 / 圈层
+            <input id="roles" name="roles" placeholder="主播，自媒体人，企业家，争议人物" />
+          </label>
+
+          <label>
+            主要平台 / 地点
+            <input id="location" name="location" placeholder="抖音、B站、微博、小红书、线下城市等" />
+          </label>
+
+          <label>
+            标签
+            <input id="tags" name="tags" placeholder="褒贬不一 流量人物 草根逆袭 翻车 口碑两极" />
+          </label>
+
+          <label>
+            简评
+            <textarea id="summary" name="summary" rows="3" placeholder="一句话概括其走红原因、争议点或公众印象"></textarea>
+          </label>
+
+          <label>
+            记录正文
+            <textarea id="biography" name="biography" required rows="9" placeholder="记录经历、代表事件、支持者观点、质疑声音和你的判断"></textarea>
+          </label>
+
+          <label>
+            来源 / 证据
+            <input id="source" name="source" placeholder="链接、视频标题、帖子、新闻、截图说明等" />
+          </label>
+
+          <label>
+            图片链接
+            <input id="image" name="image" placeholder="https://..." />
+          </label>
+
+          <label class="file-drop" for="fileInput">
+            <span>上传 TXT / JSON 文件</span>
+            <small>可自动填充记录正文或批量导入 JSON</small>
+            <input id="fileInput" type="file" accept=".txt,.json,application/json,text/plain" />
+          </label>
+
+          <button class="submit-button" type="submit">保存记录</button>
+        </form>
+      </aside>
+    </main>
+
+    <template id="personCardTemplate">
+      <article class="person-card">
+        <div class="portrait" aria-hidden="true"></div>
+        <div class="person-main">
+          <div class="person-heading">
+            <div>
+              <h3></h3>
+              <p class="meta"></p>
+            </div>
+            <div class="card-actions">
+              <button type="button" data-action="edit">编辑</button>
+              <button type="button" data-action="delete">删除</button>
+            </div>
+          </div>
+          <p class="summary"></p>
+          <div class="tags"></div>
+          <p class="reason"></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
