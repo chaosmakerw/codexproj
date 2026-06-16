@@ -86,6 +86,7 @@ function normalizeLocalPerson(input) {
     biography: String(input.biography || "").trim(),
     source: String(input.source || "").trim(),
     image: String(input.image || "").trim(),
+    status: ["approved", "pending", "rejected"].includes(input.status) ? input.status : "pending",
     createdAt: input.createdAt || now,
     updatedAt: now,
   };
@@ -156,6 +157,18 @@ function personMeta(person) {
     .join(" · ");
 }
 
+function statusOf(person) {
+  return ["approved", "pending", "rejected"].includes(person.status) ? person.status : "approved";
+}
+
+function statusLabel(status) {
+  return {
+    approved: "已通过",
+    pending: "待审核",
+    rejected: "已驳回",
+  }[status];
+}
+
 function activePeople() {
   let people = [...state.people];
   if (state.filter === "recent") {
@@ -163,6 +176,9 @@ function activePeople() {
   }
   if (state.filter === "tagged") {
     people = people.filter((person) => (person.tags || []).length);
+  }
+  if (["approved", "pending", "rejected"].includes(state.filter)) {
+    people = people.filter((person) => statusOf(person) === state.filter);
   }
   if (state.reasons.size) {
     people = people
@@ -195,12 +211,21 @@ function render() {
     const summary = node.querySelector(".summary");
     const tags = node.querySelector(".tags");
     const reason = node.querySelector(".reason");
+    const badge = node.querySelector(".status-badge");
+    const approveButton = node.querySelector('[data-action="approve"]');
+    const rejectButton = node.querySelector('[data-action="reject"]');
+    const status = statusOf(person);
 
     node.dataset.id = person.id;
+    node.dataset.status = status;
     if (person.image) portrait.style.backgroundImage = `url("${escapeHtml(person.image)}")`;
     if (!person.image) portrait.textContent = person.name.slice(0, 1) || "?";
     heading.textContent = person.name;
     meta.textContent = personMeta(person) || "未填写年代、身份或地点";
+    badge.textContent = statusLabel(status);
+    badge.dataset.status = status;
+    approveButton.hidden = status === "approved";
+    rejectButton.hidden = status === "rejected";
     summary.textContent = person.summary || `${person.biography.slice(0, 130)}...`;
     tags.innerHTML = (person.tags || [])
       .slice(0, 10)
@@ -230,6 +255,7 @@ async function loadPeople() {
 }
 
 function formData() {
+  const existing = state.people.find((person) => person.id === els.id.value);
   return {
     id: els.id.value,
     name: els.name.value,
@@ -241,6 +267,7 @@ function formData() {
     biography: els.biography.value,
     source: els.source.value,
     image: els.image.value,
+    status: existing ? statusOf(existing) : "pending",
   };
 }
 
@@ -285,6 +312,27 @@ async function savePerson(payload) {
   localWritePeople(people);
 }
 
+async function updatePersonStatus(person, status) {
+  if (state.apiAvailable) {
+    await request(`/api/people/${encodeURIComponent(person.id)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    return;
+  }
+
+  const people = localReadPeople();
+  const index = people.findIndex((item) => item.id === person.id);
+  if (index >= 0) {
+    people[index] = {
+      ...people[index],
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+    localWritePeople(people);
+  }
+}
+
 els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   els.searchStatus.textContent = "正在保存记录...";
@@ -314,6 +362,12 @@ els.list.addEventListener("click", async (event) => {
     return;
   }
 
+  if (button.dataset.action === "approve" || button.dataset.action === "reject") {
+    await updatePersonStatus(person, button.dataset.action === "approve" ? "approved" : "rejected");
+    await loadPeople();
+    return;
+  }
+
   if (button.dataset.action === "delete") {
     const confirmed = window.confirm(`确定删除「${person.name}」吗？`);
     if (!confirmed) return;
@@ -338,10 +392,15 @@ els.file.addEventListener("change", async () => {
       const people = Array.isArray(data) ? data : data.people;
       if (!Array.isArray(people)) throw new Error("JSON 需要是数组，或包含 people 数组。");
       for (const person of people) {
-        await savePerson(person);
+        await savePerson({
+          ...person,
+          status: ["approved", "pending", "rejected"].includes(person.status)
+            ? person.status
+            : "pending",
+        });
       }
       await loadPeople();
-      els.searchStatus.textContent = `已导入 ${people.length} 条记录。`;
+      els.searchStatus.textContent = `已导入 ${people.length} 条记录，请在“待审核”里查看。`;
       return;
     } catch (error) {
       els.searchStatus.textContent = error.message;

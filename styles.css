@@ -292,6 +292,25 @@ textarea:focus {
   font-size: 14px;
 }
 
+.review-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(189, 132, 43, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 247, 235, 0.72);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.review-note strong {
+  flex-shrink: 0;
+  color: #8a5b1d;
+}
+
 .auto-import {
   margin-top: 18px;
   padding-top: 18px;
@@ -405,6 +424,7 @@ input:disabled {
 
 .person-heading {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
 }
@@ -450,6 +470,36 @@ input:disabled {
   font-weight: 800;
 }
 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.status-badge[data-status="approved"] {
+  background: #e7f4ef;
+  border-color: rgba(25, 113, 106, 0.18);
+  color: #145b55;
+}
+
+.status-badge[data-status="pending"] {
+  background: #fff1d8;
+  border-color: rgba(189, 132, 43, 0.24);
+  color: #8a5b1d;
+}
+
+.status-badge[data-status="rejected"] {
+  background: #f6e5e2;
+  border-color: rgba(163, 58, 58, 0.2);
+  color: #8b3030;
+}
+
 .reason {
   margin-bottom: 0;
   color: #9a6220;
@@ -460,6 +510,7 @@ input:disabled {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .card-actions button {
@@ -471,6 +522,16 @@ input:disabled {
 .card-actions button[data-action="delete"]:hover {
   border-color: var(--danger);
   color: var(--danger);
+}
+
+.card-actions button[data-action="approve"]:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.card-actions button[data-action="reject"]:hover {
+  border-color: var(--gold);
+  color: #8a5b1d;
 }
 
 .editor {
@@ -576,6 +637,7 @@ form label {
   }
 
   .panel-heading,
+  .review-note,
   .toolbar,
   .person-heading {
     align-items: stretch;

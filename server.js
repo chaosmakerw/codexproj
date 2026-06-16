@@ -64,6 +64,9 @@ async function readJson(req) {
 
 function normalizePerson(input) {
   const now = new Date().toISOString();
+  const status = ["approved", "pending", "rejected"].includes(input.status)
+    ? input.status
+    : "pending";
   return {
     id: input.id || crypto.randomUUID(),
     name: String(input.name || "").trim(),
@@ -85,6 +88,7 @@ function normalizePerson(input) {
     biography: String(input.biography || "").trim(),
     source: String(input.source || "").trim(),
     image: String(input.image || "").trim(),
+    status,
     createdAt: input.createdAt || now,
     updatedAt: now,
   };
@@ -479,6 +483,30 @@ async function route(req, res) {
       const next = people.filter((person) => person.id !== id);
       await writePeople(next);
       sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "PATCH" && url.pathname.match(/^\/api\/people\/[^/]+\/status$/)) {
+      const parts = url.pathname.split("/");
+      const id = decodeURIComponent(parts[3]);
+      const { status } = await readJson(req);
+      if (!["approved", "pending", "rejected"].includes(status)) {
+        sendJson(res, 400, { error: "状态必须是 approved、pending 或 rejected。" });
+        return;
+      }
+      const people = await readPeople();
+      const index = people.findIndex((person) => person.id === id);
+      if (index < 0) {
+        sendJson(res, 404, { error: "记录不存在。" });
+        return;
+      }
+      people[index] = {
+        ...people[index],
+        status,
+        updatedAt: new Date().toISOString(),
+      };
+      await writePeople(people);
+      sendJson(res, 200, { person: people[index] });
       return;
     }
 

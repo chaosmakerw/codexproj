@@ -38,9 +38,17 @@
           <p id="searchStatus" class="status">当前使用本地智能排序，稳定记录优先。</p>
         </div>
 
+        <div class="review-note">
+          <strong>投稿说明</strong>
+          <span>公开网页不会把朋友的记录直接写入你的电脑。朋友提交后可导出 JSON 发给你，你导入后在“待审核”里通过或驳回。</span>
+        </div>
+
         <div class="toolbar">
           <div class="view-tabs" role="tablist" aria-label="列表视图">
             <button class="tab active" type="button" data-filter="all">全部</button>
+            <button class="tab" type="button" data-filter="approved">已通过</button>
+            <button class="tab" type="button" data-filter="pending">待审核</button>
+            <button class="tab" type="button" data-filter="rejected">已驳回</button>
             <button class="tab" type="button" data-filter="recent">最近更新</button>
             <button class="tab" type="button" data-filter="tagged">有标签</button>
           </div>
@@ -145,7 +153,10 @@
               <h3></h3>
               <p class="meta"></p>
             </div>
+            <span class="status-badge"></span>
             <div class="card-actions">
+              <button type="button" data-action="approve">通过</button>
+              <button type="button" data-action="reject">驳回</button>
               <button type="button" data-action="edit">编辑</button>
               <button type="button" data-action="delete">删除</button>
             </div>
