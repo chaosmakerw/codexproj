@@ -34,6 +34,12 @@ jobs:
         run: |
           mkdir dist
           cp index.html styles.css app.js dist/
+          printf '%s\n' \
+            'window.APP_CONFIG = {' \
+            '  supabaseUrl: "${{ secrets.SUPABASE_URL }}",' \
+            '  supabaseAnonKey: "${{ secrets.SUPABASE_ANON_KEY }}",' \
+            '};' \
+            > dist/config.js
 
       - name: Upload static files
         uses: actions/upload-pages-artifact@v3

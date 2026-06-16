@@ -22,6 +22,18 @@
     <main class="layout">
       <section class="workspace" aria-label="俗世神人记录管理">
         <div class="search-panel">
+          <div class="auth-panel">
+            <div>
+              <strong id="authStatus">本地模式</strong>
+              <p id="authRole">配置公共数据库后，可登录投稿与审核。</p>
+            </div>
+            <div class="auth-actions">
+              <input id="authEmail" type="email" placeholder="邮箱登录" autocomplete="email" />
+              <button id="loginButton" type="button" class="ghost-button">发送登录链接</button>
+              <button id="logoutButton" type="button" class="ghost-button" hidden>退出</button>
+            </div>
+          </div>
+
           <div class="panel-heading">
             <label for="searchInput">本地搜索</label>
             <span>名称 · 标签 · 正文 · 来源</span>
@@ -40,7 +52,7 @@
 
         <div class="review-note">
           <strong>投稿说明</strong>
-          <span>公开网页不会把朋友的记录直接写入你的电脑。朋友提交后可导出 JSON 发给你，你导入后在“待审核”里通过或驳回。</span>
+          <span>配置公共数据库后，朋友可登录投稿；审核员可在“待审核”里通过或驳回。未配置时仍按 JSON 导入审核。</span>
         </div>
 
         <div class="toolbar">
@@ -139,7 +151,7 @@
             <input id="fileInput" type="file" accept=".txt,.json,application/json,text/plain" />
           </label>
 
-          <button class="submit-button" type="submit">保存记录</button>
+          <button class="submit-button" type="submit">提交记录</button>
         </form>
       </aside>
     </main>
@@ -168,6 +180,8 @@
       </article>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./config.js"></script>
     <script src="./app.js" defer></script>
   </body>
 </html>

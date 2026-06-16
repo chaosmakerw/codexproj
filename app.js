@@ -3,9 +3,24 @@ const state = {
   reasons: new Map(),
   filter: "all",
   apiAvailable: true,
+  dataMode: "local",
+  user: null,
+  role: "visitor",
 };
 
 const STORAGE_KEY = "people-archive-items";
+const APP_CONFIG = window.APP_CONFIG || {};
+const hasSupabaseConfig =
+  APP_CONFIG.supabaseUrl &&
+  APP_CONFIG.supabaseAnonKey &&
+  !String(APP_CONFIG.supabaseUrl).includes("YOUR_") &&
+  !String(APP_CONFIG.supabaseAnonKey).includes("YOUR_");
+const supabaseClient =
+  hasSupabaseConfig && window.supabase
+    ? window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey)
+    : null;
+
+state.dataMode = supabaseClient ? "supabase" : "local";
 
 const els = {
   count: document.querySelector("#personCount"),
@@ -27,6 +42,11 @@ const els = {
   searchInput: document.querySelector("#searchInput"),
   searchButton: document.querySelector("#searchButton"),
   searchStatus: document.querySelector("#searchStatus"),
+  authStatus: document.querySelector("#authStatus"),
+  authRole: document.querySelector("#authRole"),
+  authEmail: document.querySelector("#authEmail"),
+  loginButton: document.querySelector("#loginButton"),
+  logoutButton: document.querySelector("#logoutButton"),
   aiImportInput: document.querySelector("#aiImportInput"),
   aiImportButton: document.querySelector("#aiImportButton"),
   aiImportStatus: document.querySelector("#aiImportStatus"),
@@ -169,6 +189,72 @@ function statusLabel(status) {
   }[status];
 }
 
+function canReview() {
+  if (!supabaseClient) return true;
+  return ["reviewer", "admin"].includes(state.role);
+}
+
+function dbToPerson(row) {
+  return {
+    id: row.id,
+    name: row.name || "",
+    era: row.era || "",
+    roles: row.roles || [],
+    location: row.location || "",
+    tags: row.tags || [],
+    summary: row.summary || "",
+    biography: row.biography || "",
+    source: row.source || "",
+    image: row.image || "",
+    status: row.status || "pending",
+    createdBy: row.created_by || "",
+    reviewedBy: row.reviewed_by || "",
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt,
+  };
+}
+
+function personToDb(input) {
+  return {
+    name: String(input.name || "").trim(),
+    era: String(input.era || "").trim(),
+    roles: splitList(input.roles),
+    location: String(input.location || "").trim(),
+    tags: splitList(input.tags),
+    summary: String(input.summary || "").trim(),
+    biography: String(input.biography || "").trim(),
+    source: String(input.source || "").trim(),
+    image: String(input.image || "").trim(),
+    status: ["approved", "pending", "rejected"].includes(input.status) ? input.status : "pending",
+  };
+}
+
+function renderAuth() {
+  if (!supabaseClient) {
+    els.authStatus.textContent = "本地模式";
+    els.authRole.textContent = "未配置公共数据库。朋友投稿需要导出 JSON 后发给你审核。";
+    els.authEmail.hidden = true;
+    els.loginButton.hidden = true;
+    els.logoutButton.hidden = true;
+    return;
+  }
+
+  els.authEmail.hidden = Boolean(state.user);
+  els.loginButton.hidden = Boolean(state.user);
+  els.logoutButton.hidden = !state.user;
+
+  if (!state.user) {
+    els.authStatus.textContent = "公共数据库";
+    els.authRole.textContent = "未登录：只能查看已通过记录。登录后可投稿。";
+    return;
+  }
+
+  els.authStatus.textContent = state.user.email || "已登录";
+  els.authRole.textContent = canReview()
+    ? `权限：${state.role}，可审核投稿。`
+    : "权限：contributor，可投稿并查看自己的待审核记录。";
+}
+
 function activePeople() {
   let people = [...state.people];
   if (state.filter === "recent") {
@@ -224,8 +310,8 @@ function render() {
     meta.textContent = personMeta(person) || "未填写年代、身份或地点";
     badge.textContent = statusLabel(status);
     badge.dataset.status = status;
-    approveButton.hidden = status === "approved";
-    rejectButton.hidden = status === "rejected";
+    approveButton.hidden = !canReview() || status === "approved";
+    rejectButton.hidden = !canReview() || status === "rejected";
     summary.textContent = person.summary || `${person.biography.slice(0, 130)}...`;
     tags.innerHTML = (person.tags || [])
       .slice(0, 10)
@@ -239,6 +325,11 @@ function render() {
 }
 
 async function loadPeople() {
+  if (supabaseClient) {
+    await loadSupabasePeople();
+    return;
+  }
+
   try {
     const payload = await request("/api/people");
     state.people = payload.people || [];
@@ -251,6 +342,51 @@ async function loadPeople() {
     els.searchStatus.textContent = "当前为纯静态模式：记录保存在本浏览器，本地搜索可用。";
     els.aiImportStatus.textContent = "有待开发。";
   }
+  render();
+}
+
+async function loadSupabaseProfile() {
+  const {
+    data: { session },
+  } = await supabaseClient.auth.getSession();
+  state.user = session?.user || null;
+  state.role = state.user ? "contributor" : "visitor";
+
+  if (state.user) {
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .select("role")
+      .eq("id", state.user.id)
+      .maybeSingle();
+    if (!error && data?.role) state.role = data.role;
+  }
+  renderAuth();
+}
+
+async function loadSupabasePeople() {
+  state.apiAvailable = false;
+  state.dataMode = "supabase";
+  await loadSupabaseProfile();
+
+  const { data, error } = await supabaseClient
+    .from("people")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    state.people = [];
+    els.searchStatus.textContent = `公共数据库读取失败：${error.message}`;
+    render();
+    return;
+  }
+
+  state.people = (data || []).map(dbToPerson);
+  els.searchStatus.textContent = canReview()
+    ? "公共数据库模式：可查看并审核待处理投稿。"
+    : state.user
+      ? "公共数据库模式：可投稿，投稿默认进入待审核。"
+      : "公共数据库模式：未登录时只显示已通过记录。";
+  els.aiImportStatus.textContent = "有待开发。";
   render();
 }
 
@@ -292,6 +428,26 @@ function editPerson(person) {
 }
 
 async function savePerson(payload) {
+  if (supabaseClient) {
+    if (!state.user) {
+      throw new Error("请先用邮箱登录，再提交记录。");
+    }
+
+    const dbPayload = personToDb(payload);
+    if (payload.id) {
+      const { error } = await supabaseClient.from("people").update(dbPayload).eq("id", payload.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabaseClient.from("people").insert({
+        ...dbPayload,
+        status: "pending",
+        created_by: state.user.id,
+      });
+      if (error) throw new Error(error.message);
+    }
+    return;
+  }
+
   if (state.apiAvailable) {
     await request("/api/people", {
       method: "POST",
@@ -313,6 +469,20 @@ async function savePerson(payload) {
 }
 
 async function updatePersonStatus(person, status) {
+  if (supabaseClient) {
+    if (!canReview()) throw new Error("只有审核员可以修改审核状态。");
+    const { error } = await supabaseClient
+      .from("people")
+      .update({
+        status,
+        reviewed_by: state.user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", person.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
   if (state.apiAvailable) {
     await request(`/api/people/${encodeURIComponent(person.id)}/status`, {
       method: "PATCH",
@@ -371,7 +541,14 @@ els.list.addEventListener("click", async (event) => {
   if (button.dataset.action === "delete") {
     const confirmed = window.confirm(`确定删除「${person.name}」吗？`);
     if (!confirmed) return;
-    if (state.apiAvailable) {
+    if (supabaseClient) {
+      if (!canReview()) {
+        els.searchStatus.textContent = "只有审核员可以删除公共数据库记录。";
+        return;
+      }
+      const { error } = await supabaseClient.from("people").delete().eq("id", person.id);
+      if (error) throw new Error(error.message);
+    } else if (state.apiAvailable) {
       await request(`/api/people/${encodeURIComponent(person.id)}`, { method: "DELETE" });
     } else {
       localWritePeople(localReadPeople().filter((item) => item.id !== person.id));
@@ -449,6 +626,45 @@ els.searchInput.addEventListener("keydown", (event) => {
     els.searchButton.click();
   }
 });
+
+els.loginButton.addEventListener("click", async () => {
+  if (!supabaseClient) return;
+  const email = els.authEmail.value.trim();
+  if (!email) {
+    els.searchStatus.textContent = "请输入邮箱。";
+    return;
+  }
+  els.loginButton.disabled = true;
+  try {
+    const { error } = await supabaseClient.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
+      },
+    });
+    if (error) throw new Error(error.message);
+    els.searchStatus.textContent = "登录链接已发送，请检查邮箱。";
+  } catch (error) {
+    els.searchStatus.textContent = error.message;
+  } finally {
+    els.loginButton.disabled = false;
+  }
+});
+
+els.logoutButton.addEventListener("click", async () => {
+  if (!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+  state.user = null;
+  state.role = "visitor";
+  state.reasons.clear();
+  await loadPeople();
+});
+
+if (supabaseClient) {
+  supabaseClient.auth.onAuthStateChange(async () => {
+    await loadPeople();
+  });
+}
 
 els.tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
