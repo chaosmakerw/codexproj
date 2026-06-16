@@ -30,13 +30,15 @@ jobs:
         with:
           enablement: true
 
+      - name: Prepare static files
+        run: |
+          mkdir dist
+          cp index.html styles.css app.js dist/
+
       - name: Upload static files
         uses: actions/upload-pages-artifact@v3
         with:
-          path: |
-            index.html
-            styles.css
-            app.js
+          path: dist
 
       - name: Deploy
         id: deployment
