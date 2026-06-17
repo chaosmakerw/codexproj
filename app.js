@@ -358,7 +358,11 @@ async function loadSupabaseProfile() {
       .select("role")
       .eq("id", state.user.id)
       .maybeSingle();
-    if (!error && data?.role) state.role = data.role;
+    if (!error && data?.role) {
+      state.role = data.role;
+    } else if (error) {
+      els.searchStatus.textContent = `公共数据库权限表未配置完整：${error.message}`;
+    }
   }
   renderAuth();
 }
