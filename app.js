@@ -6,6 +6,7 @@ const state = {
   dataMode: "local",
   user: null,
   role: "visitor",
+  passwordRecovery: false,
 };
 
 const STORAGE_KEY = "people-archive-items";
@@ -55,6 +56,7 @@ const els = {
   authPassword: document.querySelector("#authPassword"),
   loginButton: document.querySelector("#loginButton"),
   signupButton: document.querySelector("#signupButton"),
+  resetPasswordButton: document.querySelector("#resetPasswordButton"),
   logoutButton: document.querySelector("#logoutButton"),
   aiImportInput: document.querySelector("#aiImportInput"),
   aiImportButton: document.querySelector("#aiImportButton"),
@@ -246,19 +248,24 @@ function renderAuth() {
     els.authPassword.hidden = true;
     els.loginButton.hidden = true;
     els.signupButton.hidden = true;
+    els.resetPasswordButton.hidden = true;
     els.logoutButton.hidden = true;
     return;
   }
 
-  els.authEmail.hidden = Boolean(state.user);
-  els.authPassword.hidden = Boolean(state.user);
-  els.loginButton.hidden = Boolean(state.user);
-  els.signupButton.hidden = Boolean(state.user);
-  els.logoutButton.hidden = !state.user;
+  const showRecovery = state.passwordRecovery;
+  els.authEmail.hidden = Boolean(state.user) || showRecovery;
+  els.authPassword.hidden = Boolean(state.user) && !showRecovery;
+  els.loginButton.hidden = Boolean(state.user) && !showRecovery;
+  els.signupButton.hidden = Boolean(state.user) || showRecovery;
+  els.resetPasswordButton.hidden = Boolean(state.user) || showRecovery;
+  els.logoutButton.hidden = !state.user || showRecovery;
 
-  if (!state.user) {
+  if (!state.user || showRecovery) {
     els.authStatus.textContent = "公共数据库";
-    els.authRole.textContent = "未登录：只能查看已通过记录。注册或登录后可投稿。";
+    els.authRole.textContent = state.passwordRecovery
+      ? "请输入新密码，然后点击“登录”完成密码更新。"
+      : "未登录：只能查看已通过记录。注册或登录后可投稿。";
     return;
   }
 
@@ -266,6 +273,20 @@ function renderAuth() {
   els.authRole.textContent = canReview()
     ? `权限：${state.role}，可审核投稿。`
     : "权限：contributor，可投稿并查看自己的待审核记录。";
+}
+
+function authErrorMessage(error) {
+  const message = error.message || String(error);
+  if (message.toLowerCase().includes("invalid login credentials")) {
+    return "登录凭据无效：请先注册，或确认邮箱已验证，或点击“重置密码”设置新密码。";
+  }
+  if (message.toLowerCase().includes("email not confirmed")) {
+    return "邮箱还未确认：请先到邮箱点击确认链接。";
+  }
+  if (message.toLowerCase().includes("user already registered")) {
+    return "这个邮箱已经注册过，请直接登录；如果忘记密码请点“重置密码”。";
+  }
+  return message;
 }
 
 let refreshPromise = null;
@@ -659,22 +680,27 @@ els.loginButton.addEventListener("click", async () => {
   if (!supabaseClient) return;
   const email = els.authEmail.value.trim();
   const password = els.authPassword.value;
-  if (!email || !password) {
-    els.searchStatus.textContent = "请输入邮箱和密码。";
+  if (!password || (!state.passwordRecovery && !email)) {
+    els.searchStatus.textContent = state.passwordRecovery ? "请输入新密码。" : "请输入邮箱和密码。";
     return;
   }
   els.loginButton.disabled = true;
-  els.searchStatus.textContent = "正在登录...";
+  els.searchStatus.textContent = state.passwordRecovery ? "正在更新密码..." : "正在登录...";
   try {
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = state.passwordRecovery
+      ? await supabaseClient.auth.updateUser({ password })
+      : await supabaseClient.auth.signInWithPassword({
+          email,
+          password,
+        });
     if (error) throw new Error(error.message);
     els.authPassword.value = "";
-    els.searchStatus.textContent = "已登录。";
+    const wasRecovery = state.passwordRecovery;
+    state.passwordRecovery = false;
+    els.searchStatus.textContent = wasRecovery ? "密码已更新，可以继续使用。" : "已登录。";
+    await refreshApp();
   } catch (error) {
-    els.searchStatus.textContent = error.message;
+    els.searchStatus.textContent = authErrorMessage(error);
   } finally {
     els.loginButton.disabled = false;
   }
@@ -707,9 +733,31 @@ els.signupButton.addEventListener("click", async () => {
     els.authPassword.value = "";
     els.searchStatus.textContent = "注册完成。如果 Supabase 要求确认邮箱，请先去邮箱确认后再登录。";
   } catch (error) {
-    els.searchStatus.textContent = error.message;
+    els.searchStatus.textContent = authErrorMessage(error);
   } finally {
     els.signupButton.disabled = false;
+  }
+});
+
+els.resetPasswordButton.addEventListener("click", async () => {
+  if (!supabaseClient) return;
+  const email = els.authEmail.value.trim();
+  if (!email) {
+    els.searchStatus.textContent = "请输入邮箱后再重置密码。";
+    return;
+  }
+  els.resetPasswordButton.disabled = true;
+  els.searchStatus.textContent = "正在发送重置密码邮件...";
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.href.split("#")[0].split("?")[0],
+    });
+    if (error) throw new Error(error.message);
+    els.searchStatus.textContent = "重置密码邮件已发送，请检查邮箱。";
+  } catch (error) {
+    els.searchStatus.textContent = authErrorMessage(error);
+  } finally {
+    els.resetPasswordButton.disabled = false;
   }
 });
 
@@ -724,6 +772,12 @@ els.logoutButton.addEventListener("click", async () => {
 
 if (supabaseClient) {
   supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") {
+      state.passwordRecovery = true;
+      els.searchStatus.textContent = "请输入新密码，然后点击“登录”完成密码更新。";
+      renderAuth();
+      return;
+    }
     if (event === "SIGNED_IN" && window.location.hash) {
       window.history.replaceState(null, document.title, window.location.pathname);
     }
