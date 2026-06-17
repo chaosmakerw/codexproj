@@ -2,3 +2,4 @@ data/
 codex_disk_audit/
 *.log
 config.js
+supabase/private/

@@ -8,6 +8,13 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.role_grants (
+  email text primary key,
+  role text not null check (role in ('reviewer', 'admin')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.people (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -27,6 +34,7 @@ create table if not exists public.people (
 );
 
 alter table public.profiles enable row level security;
+alter table public.role_grants enable row level security;
 alter table public.people enable row level security;
 
 create or replace function public.current_role()
@@ -45,10 +53,22 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  granted_role text;
 begin
+  select role
+  into granted_role
+  from public.role_grants
+  where lower(email) = lower(new.email);
+
   insert into public.profiles (id, email, role)
-  values (new.id, new.email, 'contributor')
-  on conflict (id) do update set email = excluded.email;
+  values (new.id, new.email, coalesce(granted_role, 'contributor'))
+  on conflict (id) do update
+    set email = excluded.email,
+        role = case
+          when granted_role is not null then granted_role
+          else public.profiles.role
+        end;
   return new;
 end;
 $$;
@@ -73,6 +93,11 @@ create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute procedure public.set_updated_at();
 
+drop trigger if exists role_grants_set_updated_at on public.role_grants;
+create trigger role_grants_set_updated_at
+  before update on public.role_grants
+  for each row execute procedure public.set_updated_at();
+
 drop trigger if exists people_set_updated_at on public.people;
 create trigger people_set_updated_at
   before update on public.people
@@ -90,6 +115,34 @@ on public.profiles
 for update
 using (public.current_role() = 'admin')
 with check (public.current_role() = 'admin');
+
+drop policy if exists "role_grants_select_admin" on public.role_grants;
+create policy "role_grants_select_admin"
+on public.role_grants
+for select
+using (public.current_role() = 'admin');
+
+drop policy if exists "role_grants_insert_admin" on public.role_grants;
+create policy "role_grants_insert_admin"
+on public.role_grants
+for insert
+to authenticated
+with check (public.current_role() = 'admin');
+
+drop policy if exists "role_grants_update_admin" on public.role_grants;
+create policy "role_grants_update_admin"
+on public.role_grants
+for update
+to authenticated
+using (public.current_role() = 'admin')
+with check (public.current_role() = 'admin');
+
+drop policy if exists "role_grants_delete_admin" on public.role_grants;
+create policy "role_grants_delete_admin"
+on public.role_grants
+for delete
+to authenticated
+using (public.current_role() = 'admin');
 
 drop policy if exists "people_select_public_own_or_reviewer" on public.people;
 create policy "people_select_public_own_or_reviewer"
@@ -139,5 +192,6 @@ to authenticated
 using (public.current_role() in ('reviewer', 'admin'));
 
 -- After your own account signs in once, run one of these manually:
+-- insert into public.role_grants (email, role) values ('you@example.com', 'admin');
+-- insert into public.role_grants (email, role) values ('friend@example.com', 'reviewer');
 -- update public.profiles set role = 'admin' where email = 'you@example.com';
--- update public.profiles set role = 'reviewer' where email = 'friend@example.com';

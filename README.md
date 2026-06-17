@@ -56,8 +56,19 @@ http://localhost:4173
 1. 创建 Supabase 项目。
 2. 在 Supabase SQL Editor 运行 `supabase/schema.sql`。
 3. 在 Authentication 设置里启用 Email 登录。
-4. 至少用你的邮箱登录网站一次，让 `profiles` 自动生成账号资料。
-5. 回到 SQL Editor，把自己设为 admin：
+4. 预授权管理员和审核员邮箱：
+
+```sql
+insert into public.role_grants (email, role)
+values
+  ('you@example.com', 'admin'),
+  ('friend@example.com', 'reviewer')
+on conflict (email) do update
+set role = excluded.role;
+```
+
+5. 至少用你的邮箱登录网站一次，让 `profiles` 自动生成账号资料。预授权邮箱登录时会自动获得对应权限。
+6. 如果账号已经登录过，也可以手动更新：
 
 ```sql
 update public.profiles
