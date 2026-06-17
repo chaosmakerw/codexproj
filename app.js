@@ -17,7 +17,14 @@ const hasSupabaseConfig =
   !String(APP_CONFIG.supabaseAnonKey).includes("YOUR_");
 const supabaseClient =
   hasSupabaseConfig && window.supabase
-    ? window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey)
+    ? window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storageKey: "sushi-shenren-auth",
+        },
+      })
     : null;
 
 state.dataMode = supabaseClient ? "supabase" : "local";
@@ -253,6 +260,17 @@ function renderAuth() {
   els.authRole.textContent = canReview()
     ? `权限：${state.role}，可审核投稿。`
     : "权限：contributor，可投稿并查看自己的待审核记录。";
+}
+
+let refreshPromise = null;
+
+async function refreshApp() {
+  if (!refreshPromise) {
+    refreshPromise = loadPeople().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 function activePeople() {
@@ -643,7 +661,7 @@ els.loginButton.addEventListener("click", async () => {
     const { error } = await supabaseClient.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
+        emailRedirectTo: window.location.href.split("#")[0].split("?")[0],
       },
     });
     if (error) throw new Error(error.message);
@@ -665,8 +683,11 @@ els.logoutButton.addEventListener("click", async () => {
 });
 
 if (supabaseClient) {
-  supabaseClient.auth.onAuthStateChange(async () => {
-    await loadPeople();
+  supabaseClient.auth.onAuthStateChange(async (event) => {
+    if (event === "SIGNED_IN" && window.location.hash) {
+      window.history.replaceState(null, document.title, window.location.pathname);
+    }
+    await refreshApp();
   });
 }
 
@@ -689,6 +710,6 @@ els.exportButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-loadPeople().catch((error) => {
+refreshApp().catch((error) => {
   els.searchStatus.textContent = error.message;
 });
