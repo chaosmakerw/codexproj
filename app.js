@@ -52,7 +52,9 @@ const els = {
   authStatus: document.querySelector("#authStatus"),
   authRole: document.querySelector("#authRole"),
   authEmail: document.querySelector("#authEmail"),
+  authPassword: document.querySelector("#authPassword"),
   loginButton: document.querySelector("#loginButton"),
+  signupButton: document.querySelector("#signupButton"),
   logoutButton: document.querySelector("#logoutButton"),
   aiImportInput: document.querySelector("#aiImportInput"),
   aiImportButton: document.querySelector("#aiImportButton"),
@@ -241,18 +243,22 @@ function renderAuth() {
     els.authStatus.textContent = "本地模式";
     els.authRole.textContent = "未配置公共数据库。朋友投稿需要导出 JSON 后发给你审核。";
     els.authEmail.hidden = true;
+    els.authPassword.hidden = true;
     els.loginButton.hidden = true;
+    els.signupButton.hidden = true;
     els.logoutButton.hidden = true;
     return;
   }
 
   els.authEmail.hidden = Boolean(state.user);
+  els.authPassword.hidden = Boolean(state.user);
   els.loginButton.hidden = Boolean(state.user);
+  els.signupButton.hidden = Boolean(state.user);
   els.logoutButton.hidden = !state.user;
 
   if (!state.user) {
     els.authStatus.textContent = "公共数据库";
-    els.authRole.textContent = "未登录：只能查看已通过记录。登录后可投稿。";
+    els.authRole.textContent = "未登录：只能查看已通过记录。注册或登录后可投稿。";
     return;
   }
 
@@ -652,24 +658,58 @@ els.searchInput.addEventListener("keydown", (event) => {
 els.loginButton.addEventListener("click", async () => {
   if (!supabaseClient) return;
   const email = els.authEmail.value.trim();
-  if (!email) {
-    els.searchStatus.textContent = "请输入邮箱。";
+  const password = els.authPassword.value;
+  if (!email || !password) {
+    els.searchStatus.textContent = "请输入邮箱和密码。";
     return;
   }
   els.loginButton.disabled = true;
+  els.searchStatus.textContent = "正在登录...";
   try {
-    const { error } = await supabaseClient.auth.signInWithOtp({
+    const { error } = await supabaseClient.auth.signInWithPassword({
       email,
+      password,
+    });
+    if (error) throw new Error(error.message);
+    els.authPassword.value = "";
+    els.searchStatus.textContent = "已登录。";
+  } catch (error) {
+    els.searchStatus.textContent = error.message;
+  } finally {
+    els.loginButton.disabled = false;
+  }
+});
+
+els.signupButton.addEventListener("click", async () => {
+  if (!supabaseClient) return;
+  const email = els.authEmail.value.trim();
+  const password = els.authPassword.value;
+  if (!email || !password) {
+    els.searchStatus.textContent = "请输入邮箱和密码。";
+    return;
+  }
+  if (password.length < 6) {
+    els.searchStatus.textContent = "密码至少需要 6 位。";
+    return;
+  }
+
+  els.signupButton.disabled = true;
+  els.searchStatus.textContent = "正在注册...";
+  try {
+    const { error } = await supabaseClient.auth.signUp({
+      email,
+      password,
       options: {
         emailRedirectTo: window.location.href.split("#")[0].split("?")[0],
       },
     });
     if (error) throw new Error(error.message);
-    els.searchStatus.textContent = "登录链接已发送，请检查邮箱。";
+    els.authPassword.value = "";
+    els.searchStatus.textContent = "注册完成。如果 Supabase 要求确认邮箱，请先去邮箱确认后再登录。";
   } catch (error) {
     els.searchStatus.textContent = error.message;
   } finally {
-    els.loginButton.disabled = false;
+    els.signupButton.disabled = false;
   }
 });
 
@@ -683,11 +723,15 @@ els.logoutButton.addEventListener("click", async () => {
 });
 
 if (supabaseClient) {
-  supabaseClient.auth.onAuthStateChange(async (event) => {
+  supabaseClient.auth.onAuthStateChange((event) => {
     if (event === "SIGNED_IN" && window.location.hash) {
       window.history.replaceState(null, document.title, window.location.pathname);
     }
-    await refreshApp();
+    setTimeout(() => {
+      refreshApp().catch((error) => {
+        els.searchStatus.textContent = error.message;
+      });
+    }, 0);
   });
 }
 
